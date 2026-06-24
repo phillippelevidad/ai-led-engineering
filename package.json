@@ -1,0 +1,21 @@
+{
+  "name": "ai-led-engineering",
+  "version": "1.0.0",
+  "description": "Cursor agent skills and research for AI-assisted software engineering.",
+  "main": "index.js",
+  "scripts": {
+    "sync-claude-skills": "node scripts/sync-claude-skills.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/phillippelevidad/ai-led-engineering.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/phillippelevidad/ai-led-engineering/issues"
+  },
+  "homepage": "https://github.com/phillippelevidad/ai-led-engineering#readme"
+}

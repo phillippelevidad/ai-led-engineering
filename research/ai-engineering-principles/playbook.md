@@ -105,20 +105,60 @@ src/modules/<context>/
 | Deep inheritance hierarchies          | **Composition, flat structures**                                        | Invisible behavior the agent gets wrong                                  |
 | Implicit conventions, framework magic | **Explicit, visible wiring**                                            | Agents reason about what they can see                                    |
 | Brevity / dense idioms                | **Verbose, boring, linear**                                             | "AI loves patterns; don't confuse it"                                    |
-| Inferred types                        | **Explicit types everywhere**                                           | Types are deterministic guardrails for both agent and compiler           |
+| Inferred types / tolerated type errors | **Strict mode; explicit return types on exports; fix every type error** | Types are deterministic guardrails for both agent and compiler           |
 
 ### 3.2 Hard requirements
 
-- **MUST:** TypeScript `strict` mode on. No implicit `any`. Explicit return types on exported functions.
+**General**
+
+- **MUST:** Handle every async rejection; never fire-and-forget promises.
+- **MUST:** TypeScript `strict` mode on. Fix every type error — do not tolerate implicit `any` or other strict-mode failures.
+- **MUST:** Explicit return types on all exported functions.
 - **MUST:** Named exports only. No default exports.
-- **MUST:** Descriptive, unambiguous names. `userId`, not `id` or `u`. No abbreviations. No magic numbers/strings — name them.
+- **MUST:** Use `unknown` and narrow; never cast without a documented reason.
+- **MUST:** Export one canonical shape; avoid duplicate type definitions.
 - **MUST:** A single, consistent error shape/class across the codebase.
+- **SHOULD:** One responsibility per function; extract when intent blurs.
+- **SHOULD:** Prefer flat code; guard early, avoid nesting.
+- **SHOULD:** Keep modules orthogonal; minimize cross-import coupling.
+
+**Naming**
+
+- **MUST:** Constants at module scope: SCREAMING_SNAKE; name all literals (no magic numbers/strings).
+- **MUST:** Descriptive, unambiguous names; `userId`, not `id` or `u`; no abbreviations.
+- **SHOULD:** Variables and functions: camelCase; nouns for data, verbs for actions; `is`/`has`/`can` for booleans.
+- **SHOULD:** Classes and object interfaces: PascalCase nouns, no prefix.
+- **SHOULD:** Contract interfaces (behavior ports): `I` prefix (`IDatabase`, `ILogger`).
+- **SHOULD:** Union types: PascalCase; suffix `Result`, `Error`, or `State`.
+- **SHOULD:** Name for domain meaning; code explains **what**, comments explain **why**.
+
+**Type constructs**
+
+- **SHOULD:** Use `interface` for objects and classes; `type` for unions.
+- **SHOULD:** Prefer `const` object, `as const`, and `satisfies` over enums.
+- **SHOULD:** Encode contracts in types; validate at boundaries, assert invariants internally.
+- **SHOULD:** Discriminated unions for states, results, and canonical errors.
+- **SHOULD:** Branded types for opaque IDs, not plain strings.
+- **SHOULD:** Default to `const`; use `let` only when reassignment is necessary.
+- **SHOULD:** Good-enough types now; tighten when behavior stabilizes.
+
+**Data access & comments**
+
 - **SHOULD:** Repository pattern for all data access. Prefer custom SQL via `dataSource.query` over ORM patterns that produce N+1 queries.
 - **SHOULD NOT:** Introduce bi-directional entity relationships in data models.
 - **SHOULD:** Comments explain **why**, never **what**. The "what" is the code's job.
-- **Enforced by:** `tsconfig` strict, ESLint (custom rules for named-exports, no-magic-numbers), review.
+- **Enforced by:** `tsconfig` strict, ESLint (custom rules for named-exports, no-magic-numbers, no-floating-promises), review.
 
-### 3.3 Over-engineering guard
+### 3.3 File layout
+
+Order for top-down reading, not compiler define-before-use.
+
+- **SHOULD:** Classes: public methods first; private last in call order of public methods.
+- **SHOULD:** Modules: primary export first; helpers below in call order.
+- **SHOULD:** Single export + unexported helpers: exported first, then unexported helpers below.
+- **SHOULD NOT:** Put helpers above the orchestrator or entry point.
+
+### 3.4 Over-engineering guard
 
 - **MUST NOT:** Add files, abstractions, config options, or "flexibility" not required by the current task. Modern models default to over-building; instructions MUST explicitly constrain them to the minimal solution.
 - **Enforced by:** Review (reviewer instructed to flag only gaps affecting correctness or stated requirements) + a standing `AGENTS.md` rule: _"Implement the minimum that satisfies the spec. Do not add speculative generality."_
@@ -161,8 +201,16 @@ src/modules/<context>/
 
 - **MUST:** Tests are _boringly explicit_ — linear setup/execute/verify, minimal logic, self-contained. **Prefer duplication over shared test abstraction.** Assert business outcomes, not implementation details.
 - **MUST:** Every endpoint touching payments, vendor data, or PII has an explicit **behavioral authorization test**. These are precisely the checks agents skip and precisely where vibe-coded breaches happen.
-- **SHOULD:** Agents write the tests, including edge cases; merge is gated on tests passing.
-- **MUST NOT:** Treat raw coverage % as the goal. Gate on _behavior covered_, not lines hit.
+- **MUST:** Colocate unit tests with source (`thing.ts` + `thing.test.ts` in the same directory).
+- **MUST NOT:** Treat raw coverage % as the goal. Gate on _behavior covered_, not lines hit. Skip weak tests.
+- **SHOULD:** **Default to no test.** Add tests for one-behavior functions, business rules, non-obvious branches, and regressions from bugs — not for boilerplate.
+- **SHOULD:** Skip tests for controllers, repositories, DTOs/validation decorators, pages, layouts, and snapshots unless they carry non-obvious logic.
+- **SHOULD:** Colocate integration tests with their subject; suffix `*.integration.test.ts`.
+- **SHOULD:** E2E tests live at app or feature-journey level, not beside every source file; suffix `*.e2e.test.ts`.
+- **SHOULD:** Test names: `[what] when [condition] should [outcome]` (e.g. `createBooking when slot is taken should throw ConflictException`).
+- **SHOULD:** Design for testability; inject dependencies at boundaries.
+- **SHOULD:** Stack-specific limits (NestJS, Next.js): project testing guidance or skills.
+- **SHOULD:** Agents write tests when the rules above say one is warranted; merge is gated on tests passing.
 - **Enforced by:** CI test gate (stop-hook style: the agent keeps fixing until green); review for auth-path presence.
 
 ---
@@ -230,6 +278,7 @@ typecheck → lint → dependency-cruiser (architecture) → unit + behavioral t
 | Bloated `AGENTS.md` ("just in case" context)             | Tight, curated, undiscoverable-and-universal only (§4.2)   |
 | Thick framework abstractions for orchestration/state     | Explicit, owned, testable code                             |
 | Coverage-% as a target                                   | Behavior-covered, auth-path tests (§5)                     |
+| Tests for every file / boilerplate coverage              | Default no test; test rules, branches, and bugs (§5)       |
 | Trusting AI output without SAST/review                   | Mandatory gate stack (§6.2)                                |
 | Cross-module DB joins / shared FKs                       | Service-API access + per-module table prefixes (§1.2)      |
 
@@ -244,7 +293,7 @@ Apply in this order; each stage is independently valuable and de-risks the next.
 1. Adopt the canonical module template (§2.4) for all _new_ modules immediately; leave existing ones until touched.
 2. Install `dependency-cruiser` in CI. Start in **warn** mode to surface existing violations without blocking, then flip to **error** module-by-module as you clean them.
 3. Write the tight root `AGENTS.md` + permission tiers + ER diagram.
-4. Turn on TS `strict` (incrementally per-module via path overrides if the codebase is large) and named-exports-only.
+4. Turn on TS `strict` and fix every type error (incrementally per-module via path overrides if the codebase is large); adopt named-exports-only.
 5. Write one **golden module** that obeys every rule. Point agents and humans at it as the reference.
 
 **Stage 1 — Workflow & gates (weeks)** 6. Stand up the full CI gate stack (§6.2), block-on-critical with break-glass. 7. Adopt spec-driven workflow for anything non-trivial. 8. Add behavioral auth tests to every payment/PII/vendor-data endpoint — backfill the highest-risk endpoints first.

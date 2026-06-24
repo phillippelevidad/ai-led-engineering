@@ -1,0 +1,50 @@
+{
+  "skill_name": "pp-typescript",
+  "evals": [
+    {
+      "id": 0,
+      "name": "new-pricing-module",
+      "prompt": "I'm building a small order-pricing module in TypeScript. Write a function that takes a list of line items (each has a productId, a unitPrice in cents, and a quantity) and an optional discount, and returns the order total in cents. A discount can be a percentage off, a fixed amount off in cents, or absent. Put it in src/pricing/calculateOrderTotal.ts and add whatever tests you think are worth having.",
+      "expected_output": "A new .ts file with: named exports only, explicit return types on exported fns, a discriminated union for the discount, branded/typed ids rather than bare strings where reasonable, named constants instead of magic numbers, entry function first with helpers below in call order, and a colocated *.test.ts covering the discount branches.",
+      "files": [],
+      "assertions": [
+        "Uses named exports only — no `export default`",
+        "Exported function(s) declare an explicit return type",
+        "Discount is modeled as a discriminated union (a tag distinguishing percentage vs fixed)",
+        "Percent/other magic numbers are named constants — no bare 100 literal in the math",
+        "Entry function appears before its helpers (top-down order)",
+        "Includes a colocated *.test.ts covering percentage, fixed, and no-discount cases",
+        "Parameter and variable names are descriptive — no single-letter abbreviations"
+      ]
+    },
+    {
+      "id": 1,
+      "name": "on-touch-bugfix",
+      "prompt": "There's a bug in src/cart/applyCoupon.ts — when the coupon is expired it still applies the discount. It should reject expired coupons and return the cart unchanged. Fix it.",
+      "expected_output": "A minimal diff that fixes only the expired-coupon bug. The skill should NOT reformat the file, convert the default export, rename the abbreviated variables, add return types to untouched functions, or otherwise refactor pre-existing deviations. Scope discipline is the thing under test here.",
+      "files": ["src/cart/applyCoupon.ts"],
+      "assertions": [
+        "Bug is fixed: an expired coupon returns the cart unchanged",
+        "Keeps the existing default export — does NOT convert it to a named export",
+        "Does NOT rename the pre-existing abbreviated params (ct, c)",
+        "Does NOT refactor unrelated deviations (magic number, nesting, missing return type)",
+        "Diff is minimal — limited to expiry handling, no wholesale reformat"
+      ]
+    },
+    {
+      "id": 2,
+      "name": "nestjs-service-and-tests",
+      "prompt": "In our NestJS app, add a method to the existing PaymentsService that refunds a payment by id: it looks up the payment, checks it's refundable, calls the gateway, and records the refund. Then write tests for it. We use Jest.",
+      "expected_output": "Service method with explicit return type, a consistent error shape for the not-refundable case (discriminated/typed), unknown narrowed at the gateway boundary, dependencies injected. Tests should respect NestJS limits: at most one mock per test, integration-leaning, not an explosion of unit tests; behavioral authorization/refundability coverage given this touches payments.",
+      "files": [],
+      "assertions": [
+        "The refund method declares an explicit return type",
+        "Not-refundable case uses a consistent/typed error shape (thrown exception or result union), not a bare string/boolean",
+        "Tests respect NestJS limits: at most 8 unit tests on the service",
+        "Tests use at most one mock per test",
+        "Includes behavioral coverage of the refundable/not-refundable check (payments-touching path)",
+        "Service dependencies are injected via the constructor, not instantiated inline"
+      ]
+    }
+  ]
+}

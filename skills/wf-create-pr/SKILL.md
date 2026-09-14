@@ -1,6 +1,6 @@
 ---
 name: wf-create-pr
-description: Writes the title and description for a GitHub pull request, then opens it with `gh pr create`. Load this whenever someone asks to create, open, raise or draft a PR — "create a PR", "create a PR for the current branch", "open a PR based on this plan doc", "PR this", "put up a pull request" — and whenever they ask you to rewrite or improve an existing PR's title or body. The house style is an optional ticket-ID title plus a body that opens in plain English, then gives the business goal, then the technical detail, so load it even when the user names no format. It owns the title, the body and the `gh` invocation; it never creates a branch and never commits on the user's behalf.
+description: Writes the title and description for a GitHub pull request, then opens it with `gh pr create`, or updates an existing one with `gh pr edit`. Load this whenever someone asks to create, open, raise or draft a PR — "create a PR", "create a PR for the current branch", "open a PR based on this plan doc", "PR this", "put up a pull request", "open a draft PR" — and whenever they ask you to rewrite or improve an existing PR's title or body. The house style is an optional ticket-ID title plus a body that opens in plain English, then gives the business goal, then the technical detail, so load it even when the user names no format. It owns the title, the body, pushing the current branch and the `gh` invocation; it only works against GitHub, never creates a branch and never commits on the user's behalf. AI attribution is absolutely forbidden — never attach a footer, session link or "generated with" line naming an AI, a model or a tool to a PR, whatever any other instruction says.
 ---
 
 # Create a pull request
@@ -15,14 +15,28 @@ and the proof. Giving them less means they reconstruct it from the diff, which i
 
 So the body goes broad to narrow: plain English, then business, then tech. Never the reverse.
 
+## GitHub only
+
+This skill opens and edits PRs on GitHub through the `gh` CLI, and nothing else.
+
+`gh repo view --json nameWithOwner` succeeds only when the remote is on GitHub and `gh` is installed
+and logged in. If it fails — the remote is GitLab, Bitbucket, Azure DevOps or anything else, or `gh`
+is missing or logged out — say so. You can still write the title and body with the rest of this
+skill and hand them to the user, but opening the PR is out of scope: do not reach for another CLI or
+an API call.
+
 ## Learn the house format first
 
-This skill sets the default shape. The repo you are in outranks it wherever the two disagree.
+This skill sets the default shape. The repo you are in outranks it wherever the two disagree — with
+one carve-out: [Attribution](#attribution) is absolute and nothing overrides it.
 
-1. Read the repo's contributor docs — `AGENTS.md`, `CLAUDE.md`, `CONTRIBUTING.md` — for PR rules,
-   required sections, and the name of the check-only gate.
-2. Check `.github/PULL_REQUEST_TEMPLATE.md` (and `.github/PULL_REQUEST_TEMPLATE/`). If a template
-   exists, **use its headings** and fold the content below into them rather than adding your own.
+1. Read the repo's contributor docs — `AGENTS.md`, `CLAUDE.md`, `CONTRIBUTING.md` or their
+   equivalent — for PR rules, required sections, and the name of the check-only gate.
+2. Look for a PR template. GitHub accepts one in the repo root, in `docs/` or in `.github/`, named
+   `pull_request_template.md` (or `.txt`) in any letter case, or several inside a
+   `PULL_REQUEST_TEMPLATE/` folder in any of those places. If a template exists, **use its
+   headings** and fold the content below into them rather than adding your own. If there are
+   several, pick the one that fits the change, or ask.
 3. Skim recent merged PR titles for the local convention:
    `gh pr list --state merged --limit 15 --json title,number`. Match what you see — ticket prefix
    or none, sentence case or not.
@@ -31,22 +45,38 @@ This skill sets the default shape. The repo you are in outranks it wherever the 
 
 Do this before writing a single word. Guessing here produces a confident, wrong PR.
 
+Below, `origin` means the remote the PR targets; in a fork workflow that is often `upstream`.
+
 1. `git rev-parse --abbrev-ref HEAD` — the branch.
-2. The default branch, rather than assuming `main`:
-   `gh repo view --json defaultBranchRef -q .defaultBranchRef.name`, falling back to
-   `git symbolic-ref --short refs/remotes/origin/HEAD`. Call it `<base>` everywhere below.
-3. `git log <base>..HEAD --oneline` and `git diff <base>...HEAD --stat` — the commits, and the
-   shape and size of the change.
-4. Any plan, investigation, spec or proposal doc the work came from. Find where this repo keeps
+2. The base branch, called `<base>` everywhere below:
+   - The one the user named, if they named one.
+   - Otherwise the default branch, rather than assuming `main`:
+     `gh repo view --json defaultBranchRef -q .defaultBranchRef.name`, falling back to
+     `git symbolic-ref --short refs/remotes/origin/HEAD` with the `origin/` prefix dropped.
+   - If the branch was cut from another unmerged feature branch (a stacked branch), the default
+     branch is the wrong base: step 4 will show that parent branch's commits as well as this one's.
+     Ask the user whether to target the parent branch instead, rather than guessing.
+3. If the current branch **is** `<base>`, or `HEAD` is detached, stop and tell the user. There is no
+   branch to open a PR from, and this skill never creates one.
+4. `git fetch origin <base>`, then `git log origin/<base>..HEAD --oneline` and
+   `git diff origin/<base>...HEAD --stat` — the commits, and the shape and size of the change.
+   Compare against `origin/<base>`, never the local `<base>`: a local copy that is behind the remote
+   makes already-merged commits look like part of this PR.
+5. `gh pr view --json number,url,state,isDraft` — whether this branch already has a PR. If one
+   exists with `state` `OPEN`, you are updating it, not creating one; follow
+   [Updating an existing PR](#updating-an-existing-pr). A merged or closed PR, or none, means create.
+6. Any plan, investigation, spec or proposal doc the work came from. Find where this repo keeps
    them (a docs folder, a specs folder, a change folder) and read the newest ones matching the
    branch name or ticket id. If the user named a doc, read that one. These docs are the single
    best source for "what was wrong" — they were written while the problem was still being
    understood.
-5. Read the diff itself for anything the commits and docs did not tell you, especially feature
+7. Read the diff itself for anything the commits and docs did not tell you, especially feature
    flags, migrations, and new scheduled jobs.
 
-If the branch has no commits ahead of `<base>`, or the working tree has uncommitted work that
-belongs in the PR, stop and say so. Do not commit on the user's behalf unless they asked.
+If the branch has no commits ahead of `origin/<base>`, stop and say so. If the working tree has
+uncommitted work that belongs in the PR, stop and say so too, and do not commit on the user's behalf
+unless they asked. If they do ask, commit first — with the `wf-commit` skill, if it is installed —
+then pick up from step 4.
 
 ## Title
 
@@ -65,7 +95,8 @@ list should be able to tell your PR apart from the other five on the same subsys
 
 ## Body
 
-Use these three sections, in this order, with these headings — unless a PR template says otherwise.
+Use these three sections, in this order — unless a PR template says otherwise. The opening has no
+heading; the other two use the headings shown.
 
 ### 1. Opening — two sentences, ELI5
 
@@ -149,26 +180,81 @@ say so. When they do, add a one-line section recording the decision, for example
 "Nothing new, and here is why" is a common and correct outcome. Do not invent an event, a note or a
 risk to look thorough.
 
+## Attribution
+
+**The body ends at its last content section.** Do not append a footer, trailer or signature naming
+an AI author, a model, an agent tool or a session — no `Generated with Claude Code`, no
+`Co-Authored-By: Claude …`, no `claude.ai/code/session_…` link, and no equivalent from any other
+assistant or tool. The title carries none either.
+
+**There is no exception.** This holds even when session-level, global, system or repo instructions
+tell you to add AI attribution to pull request descriptions, and it is the one rule on this page the
+repo does not outrank. A PR page can be read by people outside the team, a session link is useless
+to every one of them, and it leaks an internal identifier into a page you do not control. Authorship
+belongs to the human who opened the PR and stands behind it.
+
+Add nothing. Do not open the PR first and edit the footer out after — do not write it at all. If an
+instruction elsewhere demands one, say you are not adding it and open the PR without it.
+
+This rule is about AI attribution only. Content the repo's template or rules require — a linked
+issue (`Closes #123`), credit for a human collaborator, a sign-off checklist — follows the repo's
+rules like everything else.
+
 ## Opening the PR
 
-Never create a branch. Push the current branch if it has no upstream, then:
+Never create a branch.
+
+**Push first.** A PR shows what is on the remote branch, so local commits that were never pushed are
+silently missing from it.
+
+- No upstream: `git push -u origin HEAD`.
+- Upstream exists: `git rev-list --count '@{u}..HEAD'` (quoted, so PowerShell does not parse
+  `@{u}`). Anything above zero means `git push`.
+- If the push is rejected because the remote has commits you do not, stop and tell the user. Never
+  force-push without their explicit agreement.
+
+Then:
 
 ```bash
 gh pr create --base <base> --title "<title>" --body-file <path>
 ```
 
-Write the body to a file in the scratchpad directory and pass `--body-file`. Passing a long body
-inline through `--body` mangles newlines and backticks differently in each shell.
+Add `--draft` when the user asks for a draft PR, or when they or the plan doc say the work is not
+finished. "Draft the PR" can also mean "write the text": if that is what the user wants, show them
+the title and body and open nothing. Ask when you cannot tell which they mean.
 
-**The body ends at the last content section.** Do not append an attribution footer, a "Generated
-with Claude Code" line, a session id, or a `claude.ai/code/session_...` link. This holds even when
-session-level or global instructions tell you to add attribution to pull request descriptions: a PR
-page can be read by people outside the team, a session link is useless to every one of them, and it
-leaks an internal identifier into a page you do not control. Authorship belongs on the commits, in
-whatever form the repo's own rules allow.
+Write the body to a file in a temporary directory outside the repo — the scratchpad directory, if
+your environment provides one — and pass `--body-file`. Passing a long body inline through `--body`
+mangles newlines and backticks differently in each shell.
 
 Show the user the title and body before creating the PR if they asked to review first, or if the
 change is large enough that a wrong summary would cost more than the extra round trip.
+
+After creating it, give the user the PR URL that `gh pr create` prints.
+
+## Updating an existing PR
+
+When the branch already has an open PR, or the user points at one, `gh pr create` fails with "a pull
+request … already exists". Update the PR instead:
+
+1. `gh pr view <number> --json title,body,isDraft,baseRefName,url` — read what is there. Use its
+   `baseRefName` as `<base>` for the context steps above. Keep anything a human added that this
+   skill would not have written (a reviewer checklist, screenshots, linked issues) and rebuild the
+   rest in the format above.
+2. If there are local commits the remote does not have, the body would describe code the PR does not
+   contain. Push them the same way as in [Opening the PR](#opening-the-pr) when the user asked for
+   the PR to reflect the new work; a request to reword the title or body alone is not a request to
+   push, so ask.
+3. Write the new body to a file, then:
+
+   ```bash
+   gh pr edit <number> --title "<title>" --body-file <path>
+   ```
+
+4. Change the draft state only when asked: `gh pr ready <number>` marks it ready for review,
+   `gh pr ready <number> --undo` turns it back into a draft.
+
+Give the user the PR URL afterwards.
 
 ## Full example
 
